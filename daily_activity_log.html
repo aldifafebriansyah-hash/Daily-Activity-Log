@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>Daily Activity Log</title>
+<meta name="theme-color" content="#233142">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Activity Log">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<!-- Firebase (dipakai untuk sinkronisasi otomatis antar HP & laptop lewat link).
+     Aman dibiarkan terpasang meski belum dikonfigurasi - aplikasi otomatis
+     jalan pakai localStorage kalau FIREBASE_CONFIG di bawah masih kosong. -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --ink:#1c2530;
+    --ink-soft:#5b6472;
+    --paper:#eef0ea;
+    --panel:#ffffff;
+    --line:#d8dccf;
+    --navy:#233142;
+    --navy-soft:#3a4a60;
+    --amber:#b8752f;
+    --amber-bg:#f4e3cc;
+    --teal:#2f7a6f;
+    --teal-bg:#d9ebe7;
+    --red:#a83a3a;
+    --red-bg:#f4d9d3;
+    --green:#4c7a3e;
+    --green-bg:#e2ecd9;
+    --purple:#6a4c93;
+    --purple-bg:#e6ddf0;
+    --holiday-bg:#f6d3ce;
+    --holiday-text:#8c2f2f;
+    --weekend-bg:#fbe9e5;
+    --week-a:#dfe7ec;
+    --week-b:#e9e4d8;
+    --week-c:#e2e8dd;
+    --week-d:#ece0e0;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans',sans-serif;
+    font-size:14px;
+    line-height:1.5;
+    padding:24px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+  body{background:
+    radial-gradient(1200px 300px at 15% -10%, rgba(35,49,66,.05), transparent),
+    var(--paper);}
+  .masthead{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    background:var(--navy);color:#fff;border-radius:8px;
+    padding:18px 22px;margin-bottom:22px;flex-wrap:wrap;gap:12px;
+    box-shadow:0 4px 14px rgba(35,49,66,.22);
+    position:relative;overflow:hidden;
+  }
+  .masthead::after{
+    content:'';position:absolute;top:0;right:0;bottom:0;width:6px;
+    background:linear-gradient(180deg,var(--amber),var(--teal),var(--red));
+  }
+  .masthead h1{
+    font-size:23px;margin:0 0 4px 0;letter-spacing:.3px;color:#fff;
+  }
+  .masthead .eyebrow{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1.5px;
+    text-transform:uppercase;color:#b9c3d1;
+  }
+  .month-nav{display:flex;align-items:center;gap:10px;}
+  .month-nav button{
+    background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:5px;
+    width:30px;height:30px;font-size:15px;cursor:pointer;
+  }
+  .month-nav button:hover{background:rgba(255,255,255,.26);}
+  .month-nav .label{
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px;min-width:150px;text-align:center;color:#fff;
+  }
+  .month-nav .today-btn{
+    font-family:'IBM Plex Sans',sans-serif;font-size:11px;background:transparent;
+    color:#fff;border:1px solid rgba(255,255,255,.5);width:auto;padding:0 10px;height:26px;border-radius:3px;
+  }
+  .month-nav .today-btn:hover{background:rgba(255,255,255,.14);}
+  .month-nav .export-btn{background:var(--amber);border-color:var(--amber);color:#fff;font-weight:600;}
+  .month-nav .export-btn:hover{background:#a3691f;}
+  .month-nav .export-btn:disabled{opacity:.6;cursor:default;}
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:20px 22px;margin-bottom:20px;
+    box-shadow:0 1px 3px rgba(28,37,48,.05), 0 4px 14px rgba(28,37,48,.04);
+  }
+  .panel h2{
+    font-size:12.5px;text-transform:uppercase;letter-spacing:1px;color:var(--navy);
+    margin:0 0 16px 0;padding-bottom:10px;border-bottom:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;
+    display:flex;align-items:center;gap:8px;
+  }
+
+  .panel h2 .n{
+    background:var(--navy);color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;
+  }
+  /* --- FORM --- */
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;}
+  .form-grid.wide{grid-template-columns:1fr;}
+  .field{display:flex;flex-direction:column;gap:4px;}
+  .field label{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;}
+  .field input,.field select,.field textarea{
+    font-family:'IBM Plex Sans',sans-serif;font-size:14px;padding:8px 10px;
+    border:1px solid var(--line);border-radius:4px;background:#fdfdfb;color:var(--ink);
+  }
+  .field textarea{resize:vertical;min-height:44px;}
+  .cat-row{display:flex;gap:8px;align-items:flex-end;}
+  .cat-row .field{flex:1;}
+  .cat-row button{
+    height:37px;padding:0 12px;border-radius:4px;border:1px solid var(--navy);
+    background:#fff;color:var(--navy);cursor:pointer;font-size:12px;white-space:nowrap;
+  }
+  .cat-row button:hover{background:var(--navy);color:#fff;}
+  .new-cat-panel{
+    grid-column:1/-1;display:flex;gap:8px;align-items:center;
+    background:#f8f7f2;border:1px dashed var(--line);border-radius:5px;padding:10px 12px;margin-top:-2px;
+  }
+  .new-cat-panel input{
+    flex:1;font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:7px 10px;
+    border:1px solid var(--line);border-radius:4px;background:#fff;
+  }
+  .new-cat-panel button{
+    height:33px;padding:0 12px;border-radius:4px;border:1px solid var(--navy);
+    background:var(--navy);color:#fff;cursor:pointer;font-size:12px;white-space:nowrap;
+  }
+  .new-cat-panel button.ghost{background:#fff;color:var(--navy);}
+  .new-cat-panel button:hover{opacity:.85;}
+  .form-actions{margin-top:14px;display:flex;gap:10px;align-items:center;}
+  .btn-primary{
+    background:var(--navy);color:#fff;border:none;padding:11px 24px;border-radius:5px;
+    font-size:13px;font-weight:600;cursor:pointer;letter-spacing:.3px;
+    box-shadow:0 2px 8px rgba(35,49,66,.28);transition:transform .1s ease, box-shadow .1s ease;
+  }
+  .btn-primary:hover{background:var(--navy-soft);transform:translateY(-1px);box-shadow:0 4px 12px rgba(35,49,66,.32);}
+  .btn-primary:active{transform:translateY(0);}
+  .form-note{font-size:12px;color:var(--ink-soft);}
+  .service-fields{display:none;grid-column:1/-1;grid-template-columns:1fr 1fr;gap:12px 16px;
+    border-top:1px dashed var(--line);margin-top:8px;padding-top:12px;}
+  .service-fields.active{display:grid;}
+  .simple-fields{display:none;grid-column:1/-1;}
+  .simple-fields.active{display:block;}
+
+  /* --- WEEKLY TABLE --- */
+  .week-block{margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid var(--line);
+    transition:box-shadow .15s ease;}
+  .week-block[open]{box-shadow:0 2px 10px rgba(28,37,48,.07);}
+  .week-head{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;
+    padding:9px 14px;color:var(--navy);letter-spacing:.5px;
+    cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+    list-style:none;user-select:none;transition:filter .1s ease;
+  }
+  .week-head:hover{filter:brightness(0.96);}
+  .week-head::-webkit-details-marker{display:none;}
+  .week-head .chev{transition:transform .15s ease;font-size:11px;display:inline-block;}
+  .week-block[open] .week-head .chev{transform:rotate(90deg);}
+  .week-head .tag-current{
+    font-size:9px;background:var(--navy);color:#fff;padding:2px 7px;border-radius:8px;
+    text-transform:uppercase;letter-spacing:.5px;margin-left:8px;
+  }
+  .week-head .meta{font-weight:400;color:var(--ink-soft);font-size:11px;}
+  table.rekap{width:100%;border-collapse:collapse;background:#fff;}
+  table.rekap th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--ink-soft);border-bottom:1px solid var(--line);padding:9px 14px;background:#f8f8f5;
+  }
+  table.rekap td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px;}
+  table.rekap tr:last-child td{border-bottom:none;}
+  table.rekap tr:hover td{background:#fafaf6;}
+  tr.weekend:hover td{background:var(--weekend-bg) !important;}
+  tr.holiday:hover td{background:var(--holiday-bg) !important;}
+  tr.weekend td{background:var(--weekend-bg);}
+  tr.holiday td{background:var(--holiday-bg);}
+  .day-cell{font-family:'IBM Plex Mono',monospace;font-weight:600;}
+  .holiday-tag{color:var(--holiday-text);font-size:11px;font-weight:600;display:block;margin-top:2px;}
+  .badge{
+    display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;
+    margin:1px 3px 1px 0;letter-spacing:.2px;
+
+  }
+  .empty-day{color:#b7bcae;font-style:italic;}
+
+  /* --- PERCENTAGE --- */
+  .pie-wrap{display:flex;gap:32px;align-items:center;flex-wrap:wrap;}
+  .pie-donut{width:180px;height:180px;border-radius:50%;position:relative;flex-shrink:0;
+    box-shadow:0 2px 10px rgba(35,49,66,.12);}
+  .pie-donut .hole{
+    position:absolute;top:22px;left:22px;width:136px;height:136px;border-radius:50%;background:#fff;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    box-shadow:inset 0 0 0 1px var(--line);
+  }
+  .pie-donut .hole .total-num{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:700;color:var(--navy);line-height:1;}
+  .pie-donut .hole .total-label{font-size:9.5px;text-transform:uppercase;color:var(--ink-soft);letter-spacing:1px;margin-top:5px;}
+  .pie-legend{flex:1;min-width:240px;display:flex;flex-direction:column;gap:11px;}
+  .legend-row{display:flex;align-items:center;gap:10px;}
+  .legend-dot{width:11px;height:11px;border-radius:3px;flex-shrink:0;}
+  .legend-name{font-weight:600;font-size:13px;width:118px;flex-shrink:0;}
+  .legend-bar-track{flex:1;height:7px;background:#eceae0;border-radius:4px;overflow:hidden;}
+  .legend-bar-fill{height:100%;border-radius:4px;}
+  .legend-val{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);width:118px;text-align:right;flex-shrink:0;}
+  .pct-empty{color:var(--ink-soft);font-size:13px;}
+
+  /* --- DETAIL --- */
+  .detail-section{margin-bottom:18px;}
+  .detail-section .cat-title{
+    display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;
+  }
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  table.simple-detail{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:6px;overflow:hidden;
+    box-shadow:0 1px 3px rgba(28,37,48,.04);}
+  table.simple-detail th{background:#f8f8f5;text-align:left;font-size:11px;text-transform:uppercase;color:var(--ink-soft);padding:9px 14px;border-bottom:1px solid var(--line);}
+  table.simple-detail td{padding:9px 14px;border-bottom:1px solid var(--line);font-size:13px;}
+  table.simple-detail tr:hover td{background:#fafaf6;}
+  table.simple-detail tr:last-child td{border-bottom:none;}
+  .del-btn{background:none;border:none;color:#a83a3a;cursor:pointer;font-size:16px;line-height:1;}
+
+  .service-card{
+    display:grid;grid-template-columns:190px 1fr;border:1px solid var(--line);
+    border-radius:6px;margin-bottom:10px;overflow:hidden;background:#fff;
+    box-shadow:0 1px 3px rgba(28,37,48,.05);
+  }
+  .service-card .meta{
+    background:var(--amber-bg);padding:14px 16px;border-right:1px solid var(--line);
+    display:flex;flex-direction:column;gap:7px;
+  }
+  .service-card .meta .date{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:14px;color:var(--navy);}
+  .service-card .meta .kv{font-size:12px;}
+  .service-card .meta .kv b{display:block;color:var(--ink-soft);font-weight:500;font-size:10px;text-transform:uppercase;}
+  .service-card .body{padding:14px 16px;display:flex;flex-direction:column;gap:9px;position:relative;}
+  .service-card .body .kv{font-size:13px;}
+  .service-card .body .kv b{display:block;color:var(--ink-soft);font-weight:600;font-size:10px;text-transform:uppercase;margin-bottom:2px;}
+
+  details.settings{margin-bottom:20px;}
+  details.settings summary{
+    cursor:pointer;font-size:12px;color:var(--ink-soft);padding:6px 0;user-select:none;
+  }
+  .settings-body{padding:14px 0 4px 0;display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  .tag-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .tag-list .tag{
+    background:#f1efe6;border:1px solid var(--line);border-radius:12px;padding:3px 10px;font-size:12px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .tag-list .tag button{background:none;border:none;color:#a83a3a;cursor:pointer;font-size:15px;font-weight:700;padding:0 2px;line-height:1;}
+  .tag-list .tag button:hover{color:#7a2828;}
+  .holiday-add{display:flex;gap:6px;margin-top:8px;}
+  .holiday-add input{flex:1;font-size:12px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;}
+  .holiday-add button{background:var(--navy);color:#fff;border:none;border-radius:4px;padding:0 10px;cursor:pointer;font-size:12px;}
+  .holiday-list{margin-top:8px;max-height:140px;overflow-y:auto;}
+  .holiday-list .hrow{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;border-bottom:1px solid #eee;}
+  .holiday-list .hrow button{background:none;border:none;color:#a83a3a;cursor:pointer;}
+  .fixed-note{font-size:11px;color:var(--ink-soft);margin-top:6px;}
+  .empty-state{color:var(--ink-soft);font-size:13px;font-style:italic;padding:6px 0;}
+  ::placeholder{color:#a8ad9e;}
+  .table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+
+  /* --- RESPONSIVE (MOBILE) --- */
+  @media (max-width: 720px){
+    body{padding:12px;font-size:13.5px;}
+    .wrap{max-width:100%;}
+    .masthead{flex-direction:column;align-items:flex-start;padding:16px;}
+    .masthead h1{font-size:19px;}
+    .month-nav{width:100%;flex-wrap:wrap;gap:8px;}
+    .month-nav .label{min-width:0;flex:1;font-size:13px;}
+    .month-nav .today-btn{flex:0 0 auto;}
+    .month-nav .export-btn{order:5;flex:1 1 100%;height:32px;margin-top:2px;}
+    .panel{padding:14px 14px;border-radius:6px;}
+    .form-grid{grid-template-columns:1fr;}
+    .service-fields.active{grid-template-columns:1fr;}
+    .cat-row{flex-direction:column;align-items:stretch;}
+    .cat-row button{width:100%;}
+    .new-cat-panel{flex-wrap:wrap;}
+    .new-cat-panel button{flex:1;}
+    .settings-body{grid-template-columns:1fr;gap:16px;}
+    table.rekap{min-width:560px;}
+    table.simple-detail{min-width:480px;}
+    .week-head{padding:9px 10px;font-size:11px;}
+    .week-head .meta{display:none;}
+    .pie-wrap{flex-direction:column;align-items:flex-start;gap:18px;}
+    .pie-donut{width:150px;height:150px;margin:0 auto;}
+    .pie-donut .hole{top:18px;left:18px;width:114px;height:114px;}
+    .pie-donut .hole .total-num{font-size:22px;}
+    .legend-name{width:96px;font-size:12px;}
+    .legend-val{width:90px;font-size:10.5px;}
+    .service-card{grid-template-columns:1fr;}
+    .service-card .meta{border-right:none;border-bottom:1px solid var(--line);flex-direction:row;flex-wrap:wrap;gap:10px 16px;}
+    .service-card .meta .date{width:100%;}
+    .form-actions{flex-wrap:wrap;}
+    .btn-primary{width:100%;}
+  }
+  @media (max-width: 400px){
+    .month-nav .today-btn, .month-nav .export-btn{font-size:10.5px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="masthead">
+    <div>
+      <div class="eyebrow" id="eyebrowText">Rekap Kegiatan Harian &middot; Otomatis</div>
+      <h1>Daily Activity Log</h1>
+    </div>
+    <div class="month-nav">
+      <button id="prevMonth">&#8249;</button>
+      <div class="label" id="monthLabel">-</div>
+      <button id="nextMonth">&#8250;</button>
+      <button class="today-btn" id="todayBtn">Bulan Ini</button>
+      <button class="today-btn export-btn" id="exportBtn">&#8681; Export Excel</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">1</span> Input Kegiatan</h2>
+    <div class="form-grid">
+      <div class="field">
+        <label>Tanggal</label>
+        <input type="date" id="fDate">
+      </div>
+      <div class="cat-row">
+        <div class="field">
+          <label>Jenis Kegiatan</label>
+          <select id="fCategory"></select>
+        </div>
+        <button id="addCatBtn" type="button">+ Kategori</button>
+      </div>
+      <div class="new-cat-panel" id="newCatPanel" style="display:none;">
+        <input type="text" id="newCatInput" placeholder="Nama kategori baru, cth. Overhaul">
+        <button id="newCatOk" type="button">Tambah</button>
+        <button id="newCatCancel" type="button" class="ghost">Batal</button>
+        <span class="form-note" id="newCatMsg"></span>
+      </div>
+
+      <div class="service-fields" id="serviceFields">
+        <div class="field"><label>Nama Partner Kerja</label><input id="sPartner" placeholder="cth. Budi"></div>
+        <div class="field"><label>Lokasi Kerja</label><input id="sLokasi" placeholder="cth. Pabrik A, Cikarang"></div>
+        <div class="field"><label>Nama Customer</label><input id="sCustomer" placeholder="cth. PT Maju Jaya"></div>
+        <div class="field"><label>HM (Hour Meter)</label><input id="sHM" placeholder="cth. 12.340"></div>
+        <div class="field" style="grid-column:1/-1;"><label>Kegiatan</label><textarea id="sKegiatan" placeholder="Uraikan kegiatan service"></textarea></div>
+        <div class="field"><label>Keluhan</label><textarea id="sKeluhan" placeholder="Keluhan customer"></textarea></div>
+        <div class="field"><label>Penanganan</label><textarea id="sPenanganan" placeholder="Tindakan yang dilakukan"></textarea></div>
+        <div class="field" style="grid-column:1/-1;"><label>Note</label><textarea id="sNote" placeholder="Catatan tambahan"></textarea></div>
+      </div>
+
+      <div class="simple-fields" id="simpleFields">
+        <div class="field"><label>Rincian Kegiatan</label><textarea id="gRincian" placeholder="Uraikan kegiatan"></textarea></div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" id="submitBtn">Simpan Kegiatan</button>
+      <span class="form-note" id="formMsg"></span>
+    </div>
+  </div>
+
+  <details class="settings">
+    <summary>Pengaturan kategori &amp; hari libur &#9662;</summary>
+    <div class="settings-body">
+      <div>
+        <b style="font-size:12px;color:var(--ink-soft);text-transform:uppercase;">Kategori Kegiatan</b>
+        <div class="fixed-note">Klik &times; pada tag untuk menghapus kategori. Kategori yang sudah punya data kegiatan pada bulan manapun tidak bisa dihapus (agar data lama tidak hilang) &mdash; hapus dulu kegiatannya di bagian Rincian Agenda, baru kategori bisa dihapus.</div>
+        <div class="tag-list" id="catTagList"></div>
+        <div class="form-note" id="catMsg" style="margin-top:6px;display:block;"></div>
+      </div>
+      <div>
+        <b style="font-size:12px;color:var(--ink-soft);text-transform:uppercase;">Hari Libur Tambahan</b>
+        <div class="fixed-note">Tanggal merah tetap (1 Jan, 1 Mei, 1 Jun, 17 Agu, 25 Des) sudah otomatis. Tambahkan cuti bersama / hari raya (Imlek, Nyepi, Idul Fitri, dll) di sini karena tanggalnya berubah tiap tahun.</div>
+        <div class="holiday-add">
+          <input type="date" id="hDate">
+          <input type="text" id="hName" placeholder="Nama libur">
+          <button id="hAddBtn">Tambah</button>
+        </div>
+        <div class="holiday-list" id="holidayList"></div>
+      </div>
+    </div>
+  </details>
+
+  <div class="panel">
+    <h2><span class="n">2</span> Rekap Mingguan</h2>
+    <div id="weeklyTables"></div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">3</span> Persentase Jenis Kegiatan (Bulan Berjalan)</h2>
+    <div id="pctSummary"></div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="n">4</span> Rincian Agenda per Kategori</h2>
+    <div id="detailTables"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const CAT_COLORS = [
+    {main:'#b8752f',bg:'#f4e3cc'}, // amber - Service
+    {main:'#2f7a6f',bg:'#d9ebe7'}, // teal - Assembly
+    {main:'#a83a3a',bg:'#f4d9d3'}, // red - K3
+    {main:'#4c7a3e',bg:'#e2ecd9'}, // green - Sparepart
+    {main:'#6a4c93',bg:'#e6ddf0'},
+    {main:'#2b5a8c',bg:'#d8e4f0'},
+    {main:'#8c5a2b',bg:'#eee0cf'},
+  ];
+  const WEEK_COLORS = ['#dfe7ec','#e9e4d8','#e2e8dd','#ece0e0'];
+  const FIXED_HOLIDAYS = [
+    {m:1,d:1,name:'Tahun Baru Masehi'},
+    {m:5,d:1,name:'Hari Buruh Internasional'},
+    {m:6,d:1,name:'Hari Lahir Pancasila'},
+    {m:8,d:17,name:'HUT Kemerdekaan RI'},
+    {m:12,d:25,name:'Hari Natal'},
+  ];
+  const DAY_NAMES = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  const MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const DEFAULT_CATEGORIES = ['Service','Assembly','K3','Sparepart'];
+
+  let categories = [];
+  let activities = [];
+  let customHolidays = {}; // 'YYYY-MM-DD' -> name
+  let viewYear, viewMonth; // month: 0-11
+
+  const $ = id => document.getElementById(id);
+
+  function pad(n){ return n<10 ? '0'+n : ''+n; }
+  function dstr(y,m,d){ return y+'-'+pad(m+1)+'-'+pad(d); }
+  function todayISO(){ const t=new Date(); return dstr(t.getFullYear(),t.getMonth(),t.getDate()); }
+  function catColor(cat){
+    const idx = categories.indexOf(cat);
+    return CAT_COLORS[idx >= 0 ? idx % CAT_COLORS.length : 0];
+  }
+  function uid(){ return 'a'+Date.now()+Math.random().toString(36).slice(2,7); }
+
+  // --- STORAGE ADAPTER ---
+  // Uses Claude's built-in window.storage when running inside a Claude artifact.
+  // Automatically falls back to browser localStorage when opened via a plain
+  // link / hosted file (e.g. GitHub Pages, Netlify) where window.storage doesn't exist.
+  const LS_PREFIX = 'dailyActivityLog:';
+  const hasClaudeStorage = !!(window.storage && typeof window.storage.get === 'function' && typeof window.storage.set === 'function');
+  let usingLocalStorage = !hasClaudeStorage;
+  const storageAdapter = {
+    async get(key){
+      if(hasClaudeStorage){
+        try{
+          const r = await window.storage.get(key, false);
+          return r || null;
+        }catch(e){ return null; }
+      }
+      try{
+        const v = localStorage.getItem(LS_PREFIX+key);
+        return v === null ? null : { key, value: v };
+      }catch(e){ return null; }
+    },
+    async set(key, value){
+      if(hasClaudeStorage){
+        try{ return await window.storage.set(key, value, false); }catch(e){ return null; }
+      }
+      try{ localStorage.setItem(LS_PREFIX+key, value); return { key, value }; }
+      catch(e){ return null; }
+    }
+  };
+
+  async function loadAll(){
+    categories = await getOrInit('categories', DEFAULT_CATEGORIES);
+    activities = await getOrInit('activities', []);
+    customHolidays = await getOrInit('holidays', {});
+  }
+  async function getOrInit(key, defVal){
+    const r = await storageAdapter.get(key);
+    if(r && r.value !== undefined && r.value !== null){
+      try{ return JSON.parse(r.value); }catch(e){ /* corrupted, fall through to reset */ }
+    }
+    await storageAdapter.set(key, JSON.stringify(defVal));
+    return defVal;
+  }
+  async function saveCategories(){
+    await storageAdapter.set('categories', JSON.stringify(categories));
+    fsPush({ categories });
+  }
+  async function saveActivities(){
+    await storageAdapter.set('activities', JSON.stringify(activities));
+    fsPush({ activities });
+  }
+  async function saveHolidays(){
+    await storageAdapter.set('holidays', JSON.stringify(customHolidays));
+    fsPush({ holidays: customHolidays });
+  }
+
+  // ================================================================
+  // SINKRONISASI OTOMATIS HP <-> LAPTOP (Firebase Firestore, opsional)
+  // ================================================================
+  // Tanpa langkah ini, aplikasi tetap jalan normal tapi datanya cuma
+  // tersimpan di 1 perangkat/browser (localStorage). Untuk sinkron
+  // otomatis real-time antar perangkat lewat link:
+  //   1. Buka https://console.firebase.google.com -> Add project (gratis).
+  //   2. Menu kiri: Build > Firestore Database -> Create database
+  //      -> pilih "Start in test mode" -> pilih lokasi server (mis. asia-southeast1).
+  //   3. Klik ikon gerigi (Project settings) -> scroll ke "Your apps"
+  //      -> klik ikon Web </> -> beri nama -> Register app.
+  //   4. Copy object "firebaseConfig" yang muncul, tempel menggantikan
+  //      objek kosong FIREBASE_CONFIG di bawah ini.
+  //   5. Ganti SYNC_ID dengan kode unikmu sendiri (bebas, misal nama+tanggal
+  //      lahir) - ini yang membuat HP & laptop kamu terhubung ke data yang sama.
+  //      Pakai SYNC_ID yang SAMA di semua perangkat yang mau disinkronkan.
+  //   6. Simpan file, lalu upload ulang ke GitHub Pages / Netlify.
+  // ============================================================
+  // >>> GANTI BAGIAN DI BAWAH INI DENGAN CONFIG FIREBASE KAMU <<<
+  // (Lihat langkah 1-4 di komentar atas. Cukup isi di antara
+  //  tanda kutip "", tidak perlu mengubah struktur lainnya.)
+  // ============================================================
+  const firebaseConfig = {
+  apiKey: "AIzaSyDptnOB-kKR42iKPEZ_8kt9KbZE9AsxS3Q",
+  authDomain: "aldi-project-233e5.firebaseapp.com",
+  projectId: "aldi-project-233e5",
+  storageBucket: "aldi-project-233e5.firebasestorage.app",
+  messagingSenderId: "321506219855",
+  appId: "1:321506219855:web:955a454e12a5a768dcd73a",
+  measurementId: "G-1WM5SRJPQP"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
+  const SYNC_ID = 'aldi-project-233e5'; // <-- ganti dengan ID unikmu, sama di semua perangkat
+
+  const hasFirebase = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && typeof firebase !== 'undefined');
+  let fsDoc = null;
+  let firebaseSynced = false;
+
+  function fsPush(partial){
+    if(!fsDoc) return;
+    fsDoc.set(Object.assign({}, partial, { updatedAt: Date.now() }), { merge: true })
+      .catch(e=>console.error('Gagal sync ke Firebase:', e));
+  }
+
+  function flashSyncNote(text){
+    const el = $('formMsg');
+    if(!el) return;
+    el.textContent = text;
+    setTimeout(()=>{ if(el.textContent===text) el.textContent=''; }, 2500);
+  }
+
+  async function initFirebaseSync(){
+    if(!hasFirebase) return;
+    try{
+      firebase.initializeApp(FIREBASE_CONFIG);
+      const db = firebase.firestore();
+      fsDoc = db.collection('dailyActivityLog').doc(SYNC_ID);
+
+      const snap = await fsDoc.get();
+      if(snap.exists){
+        const d = snap.data();
+        if(Array.isArray(d.categories)) categories = d.categories;
+        if(Array.isArray(d.activities)) activities = d.activities;
+        if(d.holidays && typeof d.holidays === 'object') customHolidays = d.holidays;
+      } else {
+        await fsDoc.set({ categories, activities, holidays: customHolidays, updatedAt: Date.now() });
+      }
+
+      fsDoc.onSnapshot(s=>{
+        if(!s.exists) return;
+        const d = s.data();
+        let changed = false;
+        if(Array.isArray(d.categories) && JSON.stringify(d.categories) !== JSON.stringify(categories)){ categories = d.categories; changed = true; }
+        if(Array.isArray(d.activities) && JSON.stringify(d.activities) !== JSON.stringify(activities)){ activities = d.activities; changed = true; }
+        if(d.holidays && JSON.stringify(d.holidays) !== JSON.stringify(customHolidays)){ customHolidays = d.holidays; changed = true; }
+        if(changed){
+          populateCategorySelect(); renderCatTags(); renderHolidayList(); renderAll();
+          flashSyncNote('Diperbarui otomatis dari perangkat lain \u2713');
+        }
+      }, err=>console.error('Sync listener error:', err));
+
+      firebaseSynced = true;
+    }catch(e){
+      console.error('Firebase init gagal:', e);
+      firebaseSynced = false;
+    }
+  }
+
+  function isHoliday(iso){
+    if(customHolidays[iso]) return customHolidays[iso];
+    const [y,m,d] = iso.split('-').map(Number);
+    const fx = FIXED_HOLIDAYS.find(h => h.m === m && h.d === d);
+    return fx ? fx.name : null;
+  }
+
+  function populateCategorySelect(){
+    const sel = $('fCategory');
+    sel.innerHTML = '';
+    categories.forEach(c=>{
+      const o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      sel.appendChild(o);
+    });
+    toggleFormFields();
+  }
+
+  function toggleFormFields(){
+    const cat = $('fCategory').value;
+    const isService = cat.trim().toLowerCase() === 'service';
+    $('serviceFields').classList.toggle('active', isService);
+    $('simpleFields').classList.toggle('active', !isService);
+  }
+
+  function renderCatTags(){
+    const box = $('catTagList');
+    box.innerHTML = '';
+    categories.forEach(c=>{
+      const col = catColor(c);
+      const tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.style.borderColor = col.main;
+      tag.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:'+col.main+';display:inline-block;"></span>'+c;
+      const del = document.createElement('button');
+      del.textContent = '\u00d7';
+      del.title = 'Hapus kategori "'+c+'"';
+      del.onclick = async ()=>{
+        const msg = $('catMsg');
+        if(activities.some(a=>a.category===c)){
+          msg.style.color = '#a83a3a';
+          msg.textContent = 'Tidak bisa menghapus "'+c+'" \u2014 masih ada kegiatan dengan kategori ini.';
+          return;
+        }
+        categories = categories.filter(x=>x!==c);
+        await saveCategories();
+        populateCategorySelect(); renderCatTags();
+        msg.style.color = '#4c7a3e';
+        msg.textContent = 'Kategori "'+c+'" dihapus.';
+        setTimeout(()=>{ if(msg.textContent.indexOf('dihapus')>-1) msg.textContent=''; }, 2500);
+      };
+      tag.appendChild(del);
+      box.appendChild(tag);
+    });
+  }
+
+  function renderHolidayList(){
+    const box = $('holidayList');
+    box.innerHTML = '';
+    const keys = Object.keys(customHolidays).sort();
+    if(keys.length===0){ box.innerHTML = '<div class="empty-state">Belum ada.</div>'; return; }
+    keys.forEach(k=>{
+      const row = document.createElement('div');
+      row.className = 'hrow';
+      row.innerHTML = '<span>'+k+' \u2014 '+customHolidays[k]+'</span>';
+      const del = document.createElement('button');
+      del.textContent = 'Hapus';
+      del.onclick = async ()=>{
+        delete customHolidays[k];
+        await saveHolidays();
+        renderHolidayList();
+        renderWeekly(); renderDetail();
+      };
+      row.appendChild(del);
+      box.appendChild(row);
+    });
+  }
+
+  function setMonthLabel(){
+    $('monthLabel').textContent = MONTH_NAMES[viewMonth] + ' ' + viewYear;
+  }
+
+  function daysInMonth(y,m){ return new Date(y, m+1, 0).getDate(); }
+
+  function renderWeekly(){
+    const box = $('weeklyTables');
+    box.innerHTML = '';
+    const total = daysInMonth(viewYear, viewMonth);
+    let weeks = [];
+    let cur = [];
+    for(let d=1; d<=total; d++){
+      const iso = dstr(viewYear, viewMonth, d);
+      const dow = new Date(viewYear, viewMonth, d).getDay(); // 0 Sun .. 6 Sat
+      cur.push({d, iso, dow});
+      if(dow === 0 || d === total){ weeks.push(cur); cur = []; }
+    }
+    const t = new Date();
+    const isCurrentMonthView = (viewYear === t.getFullYear() && viewMonth === t.getMonth());
+    const todayD = t.getDate();
+
+    weeks.forEach((week, wi)=>{
+      const block = document.createElement('details');
+      block.className = 'week-block';
+      const isCurrentWeek = isCurrentMonthView && week.some(day => day.d === todayD);
+      if(isCurrentWeek) block.open = true;
+
+      const head = document.createElement('summary');
+      head.className = 'week-head';
+      head.style.background = WEEK_COLORS[wi % WEEK_COLORS.length];
+      const first = week[0], last = week[week.length-1];
+      const rangeLabel = pad(first.d)+'-'+pad(last.d)+' '+MONTH_NAMES[viewMonth].slice(0,3);
+      const actCount = week.reduce((n,day)=> n + activities.filter(a=>a.date===day.iso).length, 0);
+      head.innerHTML = '<span><span class="chev">\u25B8</span> Minggu ke-'+(wi+1)+
+        (isCurrentWeek ? '<span class="tag-current">Berjalan</span>' : '') +
+        '</span><span class="meta">'+rangeLabel+' &middot; '+actCount+' kegiatan</span>';
+      block.appendChild(head);
+
+      const table = document.createElement('table');
+      table.className = 'rekap';
+      table.innerHTML = '<thead><tr><th style="width:90px;">Tanggal</th><th style="width:100px;">Hari</th><th style="width:220px;">Kategori Kegiatan</th><th>Ringkasan</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      week.forEach(day=>{
+        const tr = document.createElement('tr');
+        const hol = isHoliday(day.iso);
+        const weekend = day.dow === 0 || day.dow === 6;
+        if(hol) tr.className = 'holiday';
+        else if(weekend) tr.className = 'weekend';
+
+        const dayActs = activities.filter(a=>a.date===day.iso);
+        const tdDate = document.createElement('td');
+        tdDate.innerHTML = '<span class="day-cell">'+pad(day.d)+'/'+pad(viewMonth+1)+'</span>' + (hol ? '<span class="holiday-tag">'+hol+'</span>' : '');
+        const tdDay = document.createElement('td');
+        tdDay.textContent = DAY_NAMES[day.dow];
+        const tdCat = document.createElement('td');
+        if(dayActs.length){
+          dayActs.forEach(a=>{
+            const col = catColor(a.category);
+            const b = document.createElement('span');
+            b.className = 'badge';
+            b.style.background = col.bg; b.style.color = col.main;
+            b.textContent = a.category;
+            tdCat.appendChild(b);
+          });
+        } else {
+          tdCat.innerHTML = '<span class="empty-day">-</span>';
+        }
+        const tdSum = document.createElement('td');
+        if(dayActs.length){
+          tdSum.textContent = dayActs.map(a=>{
+            if(a.category.trim().toLowerCase()==='service') return a.service.kegiatan || '(tanpa uraian)';
+            return a.rincian || '(tanpa uraian)';
+          }).join(' | ');
+        } else {
+          tdSum.innerHTML = '<span class="empty-day">-</span>';
+        }
+        tr.appendChild(tdDate); tr.appendChild(tdDay); tr.appendChild(tdCat); tr.appendChild(tdSum);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      const scrollWrap = document.createElement('div');
+      scrollWrap.className = 'table-scroll';
+      scrollWrap.appendChild(table);
+      block.appendChild(scrollWrap);
+      box.appendChild(block);
+    });
+  }
+
+  function monthActivities(){
+    const prefix = viewYear+'-'+pad(viewMonth+1);
+    return activities.filter(a=>a.date.startsWith(prefix));
+  }
+
+  function renderPct(){
+    const box = $('pctSummary');
+    box.innerHTML = '';
+    const acts = monthActivities();
+    if(acts.length === 0){
+      box.innerHTML = '<div class="pct-empty">Belum ada kegiatan pada bulan ini.</div>';
+      return;
+    }
+    const counts = {};
+    acts.forEach(a=>{ counts[a.category] = (counts[a.category]||0) + 1; });
+    const total = acts.length;
+    const sortedCats = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+
+    // build conic-gradient stops
+    let acc = 0;
+    const stops = sortedCats.map(cat=>{
+      const col = catColor(cat);
+      const pct = counts[cat]/total*100;
+      const start = acc;
+      acc += pct;
+      return col.main+' '+start.toFixed(2)+'% '+acc.toFixed(2)+'%';
+    }).join(', ');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'pie-wrap';
+
+    const donut = document.createElement('div');
+    donut.className = 'pie-donut';
+    donut.style.background = 'conic-gradient(' + stops + ')';
+    donut.innerHTML = '<div class="hole"><div class="total-num">'+total+'</div><div class="total-label">Kegiatan</div></div>';
+    wrap.appendChild(donut);
+
+    const legend = document.createElement('div');
+    legend.className = 'pie-legend';
+    sortedCats.forEach(cat=>{
+      const col = catColor(cat);
+      const pct = (counts[cat]/total*100);
+      const row = document.createElement('div');
+      row.className = 'legend-row';
+      row.innerHTML =
+        '<span class="legend-dot" style="background:'+col.main+';"></span>'+
+        '<span class="legend-name">'+cat+'</span>'+
+        '<span class="legend-bar-track"><span class="legend-bar-fill" style="width:'+pct.toFixed(1)+'%;background:'+col.main+';"></span></span>'+
+        '<span class="legend-val">'+counts[cat]+' &middot; '+pct.toFixed(1)+'%</span>';
+      legend.appendChild(row);
+    });
+    wrap.appendChild(legend);
+    box.appendChild(wrap);
+  }
+
+  function fmtDate(iso){
+    const [y,m,d] = iso.split('-');
+    return d+'/'+m+'/'+y;
+  }
+
+  // --- EXCEL EXPORT ---
+  const XL_NAVY = 'FF233142';
+  const XL_LINE = 'FFD8DCCF';
+  const XL_HOLIDAY = 'FFF6D3CE';
+  const XL_WEEKEND = 'FFFBE9E5';
+  const XL_HEAD_FONT = { bold:true, color:{argb:'FFFFFFFF'} };
+  const XL_BORDER = {
+    top:{style:'thin',color:{argb:XL_LINE}}, left:{style:'thin',color:{argb:XL_LINE}},
+    bottom:{style:'thin',color:{argb:XL_LINE}}, right:{style:'thin',color:{argb:XL_LINE}}
+  };
+  function toARGB(hex){ return 'FF'+hex.replace('#','').toUpperCase(); }
+  function styleHeaderRow(row){
+    row.eachCell(c=>{
+      c.font = XL_HEAD_FONT;
+      c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XL_NAVY}};
+      c.alignment = {vertical:'middle', horizontal:'left'};
+      c.border = XL_BORDER;
+    });
+    row.height = 20;
+  }
+  function styleDataRow(row, fillArgb){
+    row.eachCell(c=>{
+      c.border = XL_BORDER;
+      c.alignment = {vertical:'top', wrapText:true};
+      if(fillArgb) c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:fillArgb}};
+    });
+  }
+
+  async function exportToExcel(){
+    const btn = $('exportBtn');
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Menyiapkan...';
+    try{
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'Daily Activity Log';
+      wb.created = new Date();
+
+      // Sheet 1: Rekap Mingguan
+      const ws1 = wb.addWorksheet('Rekap Mingguan');
+      ws1.columns = [
+        {header:'Tanggal', key:'tanggal', width:13},
+        {header:'Hari', key:'hari', width:12},
+        {header:'Minggu', key:'minggu', width:13},
+        {header:'Kategori Kegiatan', key:'kategori', width:26},
+        {header:'Ringkasan', key:'ringkasan', width:55},
+        {header:'Keterangan', key:'ket', width:22},
+      ];
+      styleHeaderRow(ws1.getRow(1));
+      ws1.views = [{state:'frozen', ySplit:1}];
+
+      const total = daysInMonth(viewYear, viewMonth);
+      let weeks = []; let cur = [];
+      for(let d=1; d<=total; d++){
+        const iso = dstr(viewYear, viewMonth, d);
+        const dow = new Date(viewYear, viewMonth, d).getDay();
+        cur.push({d, iso, dow});
+        if(dow === 0 || d === total){ weeks.push(cur); cur = []; }
+      }
+      weeks.forEach((week, wi)=>{
+        week.forEach(day=>{
+          const hol = isHoliday(day.iso);
+          const weekend = day.dow === 0 || day.dow === 6;
+          const dayActs = activities.filter(a=>a.date===day.iso);
+          const row = ws1.addRow({
+            tanggal: fmtDate(day.iso),
+            hari: DAY_NAMES[day.dow],
+            minggu: 'Minggu ke-' + (wi+1),
+            kategori: dayActs.length ? dayActs.map(a=>a.category).join(', ') : '-',
+            ringkasan: dayActs.length ? dayActs.map(a=>{
+              return a.category.trim().toLowerCase()==='service' ? (a.service.kegiatan||'-') : (a.rincian||'-');
+            }).join(' | ') : '-',
+            ket: hol ? hol : (weekend ? 'Akhir Pekan' : ''),
+          });
+          styleDataRow(row, hol ? XL_HOLIDAY : (weekend ? XL_WEEKEND : null));
+        });
+      });
+
+      // Sheet 2: Persentase Kegiatan
+      const ws2 = wb.addWorksheet('Persentase Kegiatan');
+      ws2.columns = [
+        {header:'Kategori', key:'k', width:26},
+        {header:'Jumlah Kegiatan', key:'j', width:18},
+        {header:'Persentase', key:'p', width:14},
+      ];
+      styleHeaderRow(ws2.getRow(1));
+      const acts = monthActivities();
+      const counts = {};
+      acts.forEach(a=>{ counts[a.category] = (counts[a.category]||0) + 1; });
+      const total2 = acts.length;
+      Object.keys(counts).sort((a,b)=>counts[b]-counts[a]).forEach(cat=>{
+        const col = catColor(cat);
+        const row = ws2.addRow({ k: cat, j: counts[cat], p: (total2 ? (counts[cat]/total2*100).toFixed(1) : 0)+'%' });
+        styleDataRow(row, toARGB(col.bg));
+        row.getCell('k').font = { bold:true, color:{argb:toARGB(col.main)} };
+      });
+      if(total2 === 0){
+        const row = ws2.addRow({k:'Belum ada kegiatan pada bulan ini', j:'-', p:'-'});
+        styleDataRow(row, null);
+      }
+
+      // Sheet per kategori: rincian agenda
+      categories.forEach(cat=>{
+        const list = acts.filter(a=>a.category===cat).sort((a,b)=>a.date.localeCompare(b.date));
+        if(list.length === 0) return;
+        const isService = cat.trim().toLowerCase() === 'service';
+        const safeName = ('Rincian - '+cat).replace(/[\\\/\?\*\[\]:]/g,'').slice(0,31);
+        const ws = wb.addWorksheet(safeName);
+        if(isService){
+          ws.columns = [
+            {header:'Tanggal', key:'tgl', width:12},
+            {header:'Partner Kerja', key:'partner', width:18},
+            {header:'Lokasi Kerja', key:'lokasi', width:20},
+            {header:'Customer', key:'customer', width:20},
+            {header:'HM', key:'hm', width:10},
+            {header:'Kegiatan', key:'kegiatan', width:30},
+            {header:'Keluhan', key:'keluhan', width:28},
+            {header:'Penanganan', key:'penanganan', width:28},
+            {header:'Note', key:'note', width:24},
+          ];
+          styleHeaderRow(ws.getRow(1));
+          list.forEach(a=>{
+            const s = a.service || {};
+            const row = ws.addRow({
+              tgl: fmtDate(a.date), partner: s.partner||'-', lokasi: s.lokasi||'-',
+              customer: s.customer||'-', hm: s.hm||'-', kegiatan: s.kegiatan||'-',
+              keluhan: s.keluhan||'-', penanganan: s.penanganan||'-', note: s.note||'-',
+            });
+            styleDataRow(row, null);
+          });
+        } else {
+          ws.columns = [
+            {header:'Tanggal', key:'tgl', width:14},
+            {header:'Rincian Kegiatan', key:'r', width:65},
+          ];
+          styleHeaderRow(ws.getRow(1));
+          list.forEach(a=>{
+            const row = ws.addRow({ tgl: fmtDate(a.date), r: a.rincian || '-' });
+            styleDataRow(row, null);
+          });
+        }
+        ws.views = [{state:'frozen', ySplit:1}];
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Daily_Activity_Log_'+MONTH_NAMES[viewMonth]+'_'+viewYear+'.xlsx';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url), 2000);
+    }catch(e){
+      console.error(e);
+      alert_fallback('Gagal membuat file Excel. Coba lagi.');
+    }finally{
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  }
+  function alert_fallback(msg){
+    const el = $('formMsg');
+    if(el){ el.textContent = msg; setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; }, 3500); }
+  }
+
+  function renderDetail(){
+    const box = $('detailTables');
+    box.innerHTML = '';
+    const acts = monthActivities();
+    if(acts.length === 0){
+      box.innerHTML = '<div class="empty-state">Belum ada rincian kegiatan pada bulan ini.</div>';
+      return;
+    }
+    categories.forEach(cat=>{
+      const list = acts.filter(a=>a.category===cat).sort((a,b)=>a.date.localeCompare(b.date));
+      if(list.length===0) return;
+      const col = catColor(cat);
+      const section = document.createElement('div');
+      section.className = 'detail-section';
+      const title = document.createElement('div');
+      title.className = 'cat-title';
+      title.style.color = col.main;
+      title.innerHTML = '<span class="dot" style="background:'+col.main+';"></span>'+cat+' ('+list.length+')';
+      section.appendChild(title);
+
+      if(cat.trim().toLowerCase() === 'service'){
+        list.forEach(a=>{
+          const s = a.service || {};
+          const card = document.createElement('div');
+          card.className = 'service-card';
+          card.innerHTML =
+            '<div class="meta">'+
+              '<div class="date">'+fmtDate(a.date)+'</div>'+
+              '<div class="kv"><b>Partner Kerja</b>'+(s.partner||'-')+'</div>'+
+              '<div class="kv"><b>Lokasi Kerja</b>'+(s.lokasi||'-')+'</div>'+
+              '<div class="kv"><b>Customer</b>'+(s.customer||'-')+'</div>'+
+              '<div class="kv"><b>HM</b>'+(s.hm||'-')+'</div>'+
+            '</div>'+
+            '<div class="body">'+
+              '<div class="kv"><b>Kegiatan</b>'+(s.kegiatan||'-')+'</div>'+
+              '<div class="kv"><b>Keluhan</b>'+(s.keluhan||'-')+'</div>'+
+              '<div class="kv"><b>Penanganan</b>'+(s.penanganan||'-')+'</div>'+
+              '<div class="kv"><b>Note</b>'+(s.note||'-')+'</div>'+
+            '</div>';
+          const del = document.createElement('button');
+          del.className = 'del-btn'; del.textContent = '\u00d7';
+          del.style.position='absolute'; del.style.top='6px'; del.style.right='8px';
+          del.onclick = async ()=>{ await deleteActivity(a.id); };
+          card.lastChild.appendChild(del);
+          section.appendChild(card);
+        });
+      } else {
+        const table = document.createElement('table');
+        table.className = 'simple-detail';
+        table.innerHTML = '<thead><tr><th style="width:110px;">Tanggal</th><th>Rincian Kegiatan</th><th style="width:40px;"></th></tr></thead>';
+        const tbody = document.createElement('tbody');
+        list.forEach(a=>{
+          const tr = document.createElement('tr');
+          const tdDel = document.createElement('td');
+          const del = document.createElement('button');
+          del.className='del-btn'; del.textContent='\u00d7';
+          del.onclick = async ()=>{ await deleteActivity(a.id); };
+          tdDel.appendChild(del);
+          tr.innerHTML = '<td class="day-cell">'+fmtDate(a.date)+'</td><td>'+(a.rincian||'-')+'</td>';
+          tr.appendChild(tdDel);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        const scrollWrap2 = document.createElement('div');
+        scrollWrap2.className = 'table-scroll';
+        scrollWrap2.appendChild(table);
+        section.appendChild(scrollWrap2);
+      }
+      box.appendChild(section);
+    });
+  }
+
+  async function deleteActivity(id){
+    activities = activities.filter(a=>a.id!==id);
+    await saveActivities();
+    renderAll();
+  }
+
+  function renderAll(){
+    setMonthLabel();
+    renderWeekly();
+    renderPct();
+    renderDetail();
+  }
+
+  // --- Event wiring ---
+  $('prevMonth').onclick = ()=>{
+    viewMonth--; if(viewMonth<0){ viewMonth=11; viewYear--; }
+    renderAll();
+  };
+  $('nextMonth').onclick = ()=>{
+    viewMonth++; if(viewMonth>11){ viewMonth=0; viewYear++; }
+    renderAll();
+  };
+  $('todayBtn').onclick = ()=>{
+    const t = new Date(); viewYear = t.getFullYear(); viewMonth = t.getMonth();
+    renderAll();
+  };
+  $('exportBtn').onclick = exportToExcel;
+  $('fCategory').onchange = toggleFormFields;
+  $('addCatBtn').onclick = ()=>{
+    const panel = $('newCatPanel');
+    const showing = panel.style.display === 'flex';
+    panel.style.display = showing ? 'none' : 'flex';
+    $('newCatMsg').textContent = '';
+    if(!showing){ $('newCatInput').value=''; $('newCatInput').focus(); }
+  };
+  $('newCatCancel').onclick = ()=>{
+    $('newCatPanel').style.display = 'none';
+  };
+  async function commitNewCategory(){
+    const raw = $('newCatInput').value;
+    const trimmed = raw.trim();
+    if(!trimmed){ $('newCatMsg').textContent = 'Nama kategori tidak boleh kosong.'; return; }
+    if(categories.some(c=>c.toLowerCase()===trimmed.toLowerCase())){
+      $('newCatMsg').textContent = 'Kategori sudah ada.'; return;
+    }
+    categories.push(trimmed);
+    await saveCategories();
+    populateCategorySelect(); renderCatTags();
+    $('fCategory').value = trimmed; toggleFormFields();
+    $('newCatPanel').style.display = 'none';
+    $('formMsg').textContent = 'Kategori "'+trimmed+'" ditambahkan \u2713';
+    setTimeout(()=>{ $('formMsg').textContent=''; }, 2000);
+  }
+  $('newCatOk').onclick = commitNewCategory;
+  $('newCatInput').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); commitNewCategory(); }
+  });
+
+  $('hAddBtn').onclick = async ()=>{
+    const d = $('hDate').value; const n = $('hName').value.trim();
+    if(!d || !n){ $('hName').placeholder = 'Isi tanggal & nama libur dahulu'; return; }
+    customHolidays[d] = n;
+    await saveHolidays();
+    $('hDate').value=''; $('hName').value='';
+    renderHolidayList(); renderWeekly(); renderDetail();
+  };
+
+  $('submitBtn').onclick = async ()=>{
+    const date = $('fDate').value;
+    const cat = $('fCategory').value;
+    if(!date){ $('formMsg').textContent = 'Pilih tanggal dahulu.'; return; }
+    if(!cat){ $('formMsg').textContent = 'Pilih / tambahkan kategori dahulu.'; return; }
+    const isService = cat.trim().toLowerCase()==='service';
+    const entry = { id: uid(), date, category: cat };
+    if(isService){
+      entry.service = {
+        partner: $('sPartner').value.trim(),
+        lokasi: $('sLokasi').value.trim(),
+        customer: $('sCustomer').value.trim(),
+        hm: $('sHM').value.trim(),
+        kegiatan: $('sKegiatan').value.trim(),
+        keluhan: $('sKeluhan').value.trim(),
+        penanganan: $('sPenanganan').value.trim(),
+        note: $('sNote').value.trim(),
+      };
+    } else {
+      entry.rincian = $('gRincian').value.trim();
+    }
+    activities.push(entry);
+    await saveActivities();
+
+    // reset form
+    ['sPartner','sLokasi','sCustomer','sHM','sKegiatan','sKeluhan','sPenanganan','sNote','gRincian'].forEach(id=>{ $(id).value=''; });
+    $('formMsg').textContent = 'Kegiatan tersimpan \u2713';
+    setTimeout(()=>{ $('formMsg').textContent=''; }, 2000);
+
+    // jump view to the month of the new entry so it's visible immediately
+    const [y,m] = date.split('-').map(Number);
+    viewYear = y; viewMonth = m-1;
+    renderAll();
+  };
+
+  async function init(){
+    const t = new Date();
+    viewYear = t.getFullYear(); viewMonth = t.getMonth();
+    $('fDate').value = todayISO();
+
+    await loadAll();          // baseline: Claude storage / localStorage
+    await initFirebaseSync(); // may override with cloud data + start live sync
+
+    if(firebaseSynced){
+      $('eyebrowText').innerHTML = 'Rekap Kegiatan Harian &middot; <span style="color:#8fd9c4;">&#9679; Tersinkron otomatis antar perangkat</span>';
+    } else if(hasFirebase && !firebaseSynced){
+      $('eyebrowText').textContent = 'Rekap Kegiatan Harian \u00b7 Konfigurasi Firebase belum berhasil, cek FIREBASE_CONFIG';
+    } else if(usingLocalStorage){
+      $('eyebrowText').textContent = 'Rekap Kegiatan Harian \u00b7 Data tersimpan di perangkat/browser ini saja';
+    }
+
+    populateCategorySelect();
+    renderCatTags();
+    renderHolidayList();
+    renderAll();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
