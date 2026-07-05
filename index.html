@@ -491,14 +491,17 @@
   async function saveCategories(){
     await storageAdapter.set('categories', JSON.stringify(categories));
     fsPush({ categories });
+    pushToGoogleSheets();
   }
   async function saveActivities(){
     await storageAdapter.set('activities', JSON.stringify(activities));
     fsPush({ activities });
+    pushToGoogleSheets();
   }
   async function saveHolidays(){
     await storageAdapter.set('holidays', JSON.stringify(customHolidays));
     fsPush({ holidays: customHolidays });
+    pushToGoogleSheets();
   }
 
   // ================================================================
@@ -585,6 +588,31 @@
       console.error('Firebase init gagal:', e);
       firebaseSynced = false;
     }
+  }
+
+  // ================================================================
+  // SPREADSHEET OTOMATIS TERUPDATE (Google Sheets via Apps Script)
+  // ================================================================
+  // Setiap kali kegiatan/kategori/hari libur disimpan di web ini, data
+  // otomatis dikirim untuk menulis ulang sheet "Rekap Mingguan",
+  // "Persentase Kegiatan", dan "Rincian - <kategori>" di Google Sheets.
+  // Cara pasang:
+  //   1. Buat Google Sheet baru -> Extensions > Apps Script.
+  //   2. Paste kode dari file "google_sheets_sync.gs.txt" yang saya berikan.
+  //   3. Deploy > New deployment > Web app -> Execute as "Me",
+  //      Who has access "Anyone" -> Deploy -> copy Web app URL.
+  //   4. Tempel URL itu ke GOOGLE_SHEETS_WEBAPP_URL di bawah ini.
+  const GOOGLE_SHEETS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbypaU8i-tzE_O_xZG5QXwawaWGKuq5mW9hr4bmQoVsQ9TvR3K_-q5FP9YqAmOgGtDon5Q/exec'; // <-- tempel Web App URL Apps Script di sini
+
+  function pushToGoogleSheets(){
+    if(!GOOGLE_SHEETS_WEBAPP_URL) return;
+    const payload = { viewYear, viewMonth, activities, categories, holidays: customHolidays };
+    fetch(GOOGLE_SHEETS_WEBAPP_URL, {
+      method: 'POST',
+      mode: 'no-cors', // Apps Script tidak mendukung header CORS biasa; ini trik standar agar tetap terkirim
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).catch(e=>console.error('Gagal sync ke Google Sheets:', e));
   }
 
   function isHoliday(iso){
