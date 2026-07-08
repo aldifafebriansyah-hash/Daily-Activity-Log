@@ -122,6 +122,15 @@
   }
   .field textarea{resize:vertical;min-height:44px;}
   .cat-row{display:flex;gap:8px;align-items:flex-end;}
+  .range-toggle{
+    background:#f8f7f2;border:1px dashed var(--line);border-radius:5px;
+    padding:9px 12px;margin-top:-4px;
+  }
+  .range-toggle-label{
+    display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-soft);
+    cursor:pointer;user-select:none;
+  }
+  .range-toggle-label input[type="checkbox"]{width:15px;height:15px;accent-color:var(--navy);cursor:pointer;flex-shrink:0;}
   .cat-row .field{flex:1;}
   .cat-row button{
     height:37px;padding:0 12px;border-radius:4px;border:1px solid var(--navy);
@@ -331,8 +340,18 @@
     <h2><span class="n">1</span> Input Kegiatan</h2>
     <div class="form-grid">
       <div class="field">
-        <label>Tanggal</label>
+        <label id="fDateLabel">Tanggal</label>
         <input type="date" id="fDate">
+      </div>
+      <div class="field" id="fDateEndWrap" style="display:none;">
+        <label>Tanggal Akhir</label>
+        <input type="date" id="fDateEnd">
+      </div>
+      <div class="range-toggle" style="grid-column:1/-1;">
+        <label class="range-toggle-label">
+          <input type="checkbox" id="fRangeToggle">
+          Isi untuk rentang beberapa hari sekaligus (kegiatan sama tiap hari)
+        </label>
       </div>
       <div class="cat-row">
         <div class="field">
@@ -1107,6 +1126,12 @@
   };
   $('exportBtn').onclick = exportToExcel;
   $('fCategory').onchange = toggleFormFields;
+  $('fRangeToggle').onchange = ()=>{
+    const on = $('fRangeToggle').checked;
+    $('fDateEndWrap').style.display = on ? 'flex' : 'none';
+    $('fDateLabel').textContent = on ? 'Tanggal Mulai' : 'Tanggal';
+    if(on && !$('fDateEnd').value) $('fDateEnd').value = $('fDate').value || todayISO();
+  };
   $('addCatBtn').onclick = ()=>{
     const panel = $('newCatPanel');
     const showing = panel.style.display === 'flex';
@@ -1146,37 +1171,68 @@
     renderHolidayList(); renderWeekly(); renderDetail();
   };
 
-  $('submitBtn').onclick = async ()=>{
-    const date = $('fDate').value;
-    const cat = $('fCategory').value;
-    if(!date){ $('formMsg').textContent = 'Pilih tanggal dahulu.'; return; }
-    if(!cat){ $('formMsg').textContent = 'Pilih / tambahkan kategori dahulu.'; return; }
-    const isService = cat.trim().toLowerCase()==='service';
-    const entry = { id: uid(), date, category: cat };
-    if(isService){
-      entry.service = {
-        partner: $('sPartner').value.trim(),
-        lokasi: $('sLokasi').value.trim(),
-        customer: $('sCustomer').value.trim(),
-        hm: $('sHM').value.trim(),
-        kegiatan: $('sKegiatan').value.trim(),
-        keluhan: $('sKeluhan').value.trim(),
-        penanganan: $('sPenanganan').value.trim(),
-        note: $('sNote').value.trim(),
-      };
-    } else {
-      entry.rincian = $('gRincian').value.trim();
+  function datesBetween(startISO, endISO){
+    const dates = [];
+    let cur = new Date(startISO+'T00:00:00');
+    const end = new Date(endISO+'T00:00:00');
+    while(cur <= end){
+      dates.push(dstr(cur.getFullYear(), cur.getMonth(), cur.getDate()));
+      cur.setDate(cur.getDate()+1);
     }
-    activities.push(entry);
+    return dates;
+  }
+
+  $('submitBtn').onclick = async ()=>{
+    const isRange = $('fRangeToggle').checked;
+    const startDate = $('fDate').value;
+    const endDate = $('fDateEnd').value;
+    const cat = $('fCategory').value;
+
+    if(!startDate){ $('formMsg').textContent = isRange ? 'Pilih tanggal mulai dahulu.' : 'Pilih tanggal dahulu.'; return; }
+    if(isRange && !endDate){ $('formMsg').textContent = 'Pilih tanggal akhir dahulu.'; return; }
+    if(isRange && endDate < startDate){ $('formMsg').textContent = 'Tanggal akhir tidak boleh sebelum tanggal mulai.'; return; }
+    if(!cat){ $('formMsg').textContent = 'Pilih / tambahkan kategori dahulu.'; return; }
+
+    let targetDates = [startDate];
+    if(isRange){
+      targetDates = datesBetween(startDate, endDate);
+      if(targetDates.length > 366){ $('formMsg').textContent = 'Rentang tanggal terlalu panjang (maks. 366 hari).'; return; }
+    }
+
+    const isService = cat.trim().toLowerCase()==='service';
+    const sharedFields = isService ? {
+      partner: $('sPartner').value.trim(),
+      lokasi: $('sLokasi').value.trim(),
+      customer: $('sCustomer').value.trim(),
+      hm: $('sHM').value.trim(),
+      kegiatan: $('sKegiatan').value.trim(),
+      keluhan: $('sKeluhan').value.trim(),
+      penanganan: $('sPenanganan').value.trim(),
+      note: $('sNote').value.trim(),
+    } : null;
+    const sharedRincian = isService ? null : $('gRincian').value.trim();
+
+    targetDates.forEach(date=>{
+      const entry = { id: uid(), date, category: cat };
+      if(isService){ entry.service = Object.assign({}, sharedFields); }
+      else { entry.rincian = sharedRincian; }
+      activities.push(entry);
+    });
     await saveActivities();
 
     // reset form
     ['sPartner','sLokasi','sCustomer','sHM','sKegiatan','sKeluhan','sPenanganan','sNote','gRincian'].forEach(id=>{ $(id).value=''; });
-    $('formMsg').textContent = 'Kegiatan tersimpan \u2713';
-    setTimeout(()=>{ $('formMsg').textContent=''; }, 2000);
+    $('fRangeToggle').checked = false;
+    $('fDateEndWrap').style.display = 'none';
+    $('fDateLabel').textContent = 'Tanggal';
+    $('fDateEnd').value = '';
+    $('formMsg').textContent = targetDates.length > 1
+      ? targetDates.length+' kegiatan tersimpan (rentang tanggal) \u2713'
+      : 'Kegiatan tersimpan \u2713';
+    setTimeout(()=>{ $('formMsg').textContent=''; }, 3000);
 
-    // jump view to the month of the new entry so it's visible immediately
-    const [y,m] = date.split('-').map(Number);
+    // jump view to the month of the first entry so it's visible immediately
+    const [y,m] = startDate.split('-').map(Number);
     viewYear = y; viewMonth = m-1;
     renderAll();
   };
