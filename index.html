@@ -576,7 +576,10 @@
   function fsPush(partial){
     if(!fsDoc) return;
     fsDoc.set(Object.assign({}, partial, { updatedAt: Date.now() }), { merge: true })
-      .catch(e=>console.error('Gagal sync ke Firebase:', e));
+      .catch(e=>{
+        console.error('Gagal sync ke Firebase:', e);
+        flashSyncNote('\u26a0 Gagal sinkron ke cloud: '+(e && e.message ? e.message : 'unknown error'));
+      });
   }
 
   function flashSyncNote(text){
