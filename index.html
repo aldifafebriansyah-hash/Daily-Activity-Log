@@ -364,6 +364,9 @@
           <input type="checkbox" id="fRangeToggle">
           Isi untuk rentang beberapa hari sekaligus (kegiatan sama tiap hari)
         </label>
+        <div id="rangeEditHint" style="display:none;font-size:11px;color:var(--amber);margin-top:5px;">
+          Kegiatan lama ini akan diganti menjadi beberapa kegiatan baru sesuai rentang tanggal yang dipilih.
+        </div>
       </div>
       <div class="cat-row">
         <div class="field">
@@ -1177,6 +1180,11 @@
     $('editModeBadge').style.display = 'none';
     $('submitBtn').textContent = 'Simpan Kegiatan';
     $('cancelEditBtn').style.display = 'none';
+    $('rangeEditHint').style.display = 'none';
+    $('fRangeToggle').checked = false;
+    $('fDateEndWrap').style.display = 'none';
+    $('fDateLabel').textContent = 'Tanggal';
+    $('fDateEnd').value = '';
     ['sPartner','sLokasi','sCustomer','sHM','sKegiatan','sKeluhan','sPenanganan','sNote','gRincian'].forEach(id=>{ $(id).value=''; });
     $('fDate').value = todayISO();
   }
@@ -1208,6 +1216,7 @@
     $('fDateEndWrap').style.display = on ? 'flex' : 'none';
     $('fDateLabel').textContent = on ? 'Tanggal Mulai' : 'Tanggal';
     if(on && !$('fDateEnd').value) $('fDateEnd').value = $('fDate').value || todayISO();
+    $('rangeEditHint').style.display = (on && editingId) ? 'block' : 'none';
   };
   $('cancelEditBtn').onclick = ()=>{ exitEditMode(); };
   $('addCatBtn').onclick = ()=>{
@@ -1267,34 +1276,58 @@
 
     // --- MODE UPDATE: sedang mengedit satu kegiatan yang sudah ada ---
     if(editingId){
-      const date = $('fDate').value;
-      if(!date){ $('formMsg').textContent = 'Pilih tanggal dahulu.'; return; }
+      const isRange = $('fRangeToggle').checked;
+      const startDate = $('fDate').value;
+      const endDate = $('fDateEnd').value;
+
+      if(!startDate){ $('formMsg').textContent = isRange ? 'Pilih tanggal mulai dahulu.' : 'Pilih tanggal dahulu.'; return; }
+      if(isRange && !endDate){ $('formMsg').textContent = 'Pilih tanggal akhir dahulu.'; return; }
+      if(isRange && endDate < startDate){ $('formMsg').textContent = 'Tanggal akhir tidak boleh sebelum tanggal mulai.'; return; }
+
       const idx = activities.findIndex(a=>a.id===editingId);
       if(idx === -1){ exitEditMode(); return; }
 
-      const updated = { id: editingId, date, category: cat };
-      if(isService){
-        updated.service = {
-          partner: $('sPartner').value.trim(),
-          lokasi: $('sLokasi').value.trim(),
-          customer: $('sCustomer').value.trim(),
-          hm: $('sHM').value.trim(),
-          kegiatan: $('sKegiatan').value.trim(),
-          keluhan: $('sKeluhan').value.trim(),
-          penanganan: $('sPenanganan').value.trim(),
-          note: $('sNote').value.trim(),
-        };
-      } else {
-        updated.rincian = $('gRincian').value.trim();
-      }
-      activities[idx] = updated;
-      await saveActivities();
+      const sharedFields = isService ? {
+        partner: $('sPartner').value.trim(),
+        lokasi: $('sLokasi').value.trim(),
+        customer: $('sCustomer').value.trim(),
+        hm: $('sHM').value.trim(),
+        kegiatan: $('sKegiatan').value.trim(),
+        keluhan: $('sKeluhan').value.trim(),
+        penanganan: $('sPenanganan').value.trim(),
+        note: $('sNote').value.trim(),
+      } : null;
+      const sharedRincian = isService ? null : $('gRincian').value.trim();
 
+      let savedCount;
+      if(isRange){
+        // Ganti 1 entri lama dengan beberapa entri baru sesuai rentang tanggal
+        const targetDates = datesBetween(startDate, endDate);
+        if(targetDates.length > 366){ $('formMsg').textContent = 'Rentang tanggal terlalu panjang (maks. 366 hari).'; return; }
+        activities.splice(idx, 1); // hapus entri lama
+        targetDates.forEach(date=>{
+          const entry = { id: uid(), date, category: cat };
+          if(isService){ entry.service = Object.assign({}, sharedFields); }
+          else { entry.rincian = sharedRincian; }
+          activities.push(entry);
+        });
+        savedCount = targetDates.length;
+      } else {
+        const updated = { id: editingId, date: startDate, category: cat };
+        if(isService){ updated.service = sharedFields; }
+        else { updated.rincian = sharedRincian; }
+        activities[idx] = updated;
+        savedCount = 1;
+      }
+
+      await saveActivities();
       exitEditMode();
-      $('formMsg').textContent = 'Kegiatan berhasil diperbarui \u2713';
+      $('formMsg').textContent = isRange
+        ? '1 kegiatan diganti menjadi '+savedCount+' kegiatan (rentang tanggal) \u2713'
+        : 'Kegiatan berhasil diperbarui \u2713';
       setTimeout(()=>{ $('formMsg').textContent=''; }, 3000);
 
-      const [y,m] = date.split('-').map(Number);
+      const [y,m] = startDate.split('-').map(Number);
       viewYear = y; viewMonth = m-1;
       renderAll();
       return;
