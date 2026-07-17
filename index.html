@@ -159,6 +159,17 @@
   }
   .btn-primary:hover{background:var(--navy-soft);transform:translateY(-1px);box-shadow:0 4px 12px rgba(35,49,66,.32);}
   .btn-primary:active{transform:translateY(0);}
+  .btn-secondary{
+    background:#fff;color:var(--ink-soft);border:1px solid var(--line);padding:10px 20px;
+    border-radius:5px;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:.3px;
+  }
+  .btn-secondary:hover{background:#f5f4ef;color:var(--ink);}
+  .edit-badge{
+    display:inline-block;background:var(--teal-bg);color:var(--teal);font-size:11px;font-weight:700;
+    padding:3px 9px;border-radius:10px;margin-bottom:8px;letter-spacing:.3px;
+  }
+  .edit-btn{background:none;border:none;color:var(--navy);cursor:pointer;font-size:14px;line-height:1;margin-right:4px;}
+  .edit-btn:hover{color:var(--navy-soft);}
   .form-note{font-size:12px;color:var(--ink-soft);}
   .service-fields{display:none;grid-column:1/-1;grid-template-columns:1fr 1fr;gap:12px 16px;
     border-top:1px dashed var(--line);margin-top:8px;padding-top:12px;}
@@ -338,6 +349,7 @@
 
   <div class="panel">
     <h2><span class="n">1</span> Input Kegiatan</h2>
+    <div id="editModeBadge" class="edit-badge" style="display:none;">&#9998; Mode edit: mengubah kegiatan yang sudah ada</div>
     <div class="form-grid">
       <div class="field">
         <label id="fDateLabel">Tanggal</label>
@@ -384,6 +396,7 @@
     </div>
     <div class="form-actions">
       <button class="btn-primary" id="submitBtn">Simpan Kegiatan</button>
+      <button class="btn-secondary" id="cancelEditBtn" type="button" style="display:none;">Batal Edit</button>
       <span class="form-note" id="formMsg"></span>
     </div>
   </div>
@@ -453,6 +466,7 @@
   let activities = [];
   let customHolidays = {}; // 'YYYY-MM-DD' -> name
   let viewYear, viewMonth; // month: 0-11
+  let editingId = null; // id of activity currently being edited, or null
 
   const $ = id => document.getElementById(id);
 
@@ -1069,23 +1083,35 @@
           del.className = 'del-btn'; del.textContent = '\u00d7';
           del.style.position='absolute'; del.style.top='6px'; del.style.right='8px';
           del.onclick = async ()=>{ await deleteActivity(a.id); };
+          const edit = document.createElement('button');
+          edit.className = 'edit-btn'; edit.innerHTML = '&#9998;';
+          edit.title = 'Edit kegiatan ini';
+          edit.style.position='absolute'; edit.style.top='6px'; edit.style.right='30px';
+          edit.onclick = ()=>{ startEdit(a.id); };
+          card.lastChild.style.position='relative';
+          card.lastChild.appendChild(edit);
           card.lastChild.appendChild(del);
           section.appendChild(card);
         });
       } else {
         const table = document.createElement('table');
         table.className = 'simple-detail';
-        table.innerHTML = '<thead><tr><th style="width:110px;">Tanggal</th><th>Rincian Kegiatan</th><th style="width:40px;"></th></tr></thead>';
+        table.innerHTML = '<thead><tr><th style="width:110px;">Tanggal</th><th>Rincian Kegiatan</th><th style="width:60px;"></th></tr></thead>';
         const tbody = document.createElement('tbody');
         list.forEach(a=>{
           const tr = document.createElement('tr');
-          const tdDel = document.createElement('td');
+          const tdAction = document.createElement('td');
+          const edit = document.createElement('button');
+          edit.className='edit-btn'; edit.innerHTML='&#9998;';
+          edit.title = 'Edit kegiatan ini';
+          edit.onclick = ()=>{ startEdit(a.id); };
           const del = document.createElement('button');
           del.className='del-btn'; del.textContent='\u00d7';
           del.onclick = async ()=>{ await deleteActivity(a.id); };
-          tdDel.appendChild(del);
+          tdAction.appendChild(edit);
+          tdAction.appendChild(del);
           tr.innerHTML = '<td class="day-cell">'+fmtDate(a.date)+'</td><td>'+(a.rincian||'-')+'</td>';
-          tr.appendChild(tdDel);
+          tr.appendChild(tdAction);
           tbody.appendChild(tr);
         });
         table.appendChild(tbody);
@@ -1099,9 +1125,57 @@
   }
 
   async function deleteActivity(id){
+    if(editingId === id) exitEditMode();
     activities = activities.filter(a=>a.id!==id);
     await saveActivities();
     renderAll();
+  }
+
+  function startEdit(id){
+    const a = activities.find(x=>x.id===id);
+    if(!a) return;
+    editingId = id;
+
+    $('fRangeToggle').checked = false;
+    $('fDateEndWrap').style.display = 'none';
+    $('fDateLabel').textContent = 'Tanggal';
+    $('fDateEnd').value = '';
+
+    $('fDate').value = a.date;
+    $('fCategory').value = a.category;
+    toggleFormFields();
+
+    const isService = a.category.trim().toLowerCase()==='service';
+    if(isService){
+      const s = a.service || {};
+      $('sPartner').value = s.partner || '';
+      $('sLokasi').value = s.lokasi || '';
+      $('sCustomer').value = s.customer || '';
+      $('sHM').value = s.hm || '';
+      $('sKegiatan').value = s.kegiatan || '';
+      $('sKeluhan').value = s.keluhan || '';
+      $('sPenanganan').value = s.penanganan || '';
+      $('sNote').value = s.note || '';
+    } else {
+      $('gRincian').value = a.rincian || '';
+    }
+
+    $('editModeBadge').style.display = 'inline-block';
+    $('submitBtn').textContent = 'Update Kegiatan';
+    $('cancelEditBtn').style.display = 'inline-block';
+    $('formMsg').textContent = '';
+
+    const panel = $('editModeBadge').closest('.panel');
+    if(panel) panel.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function exitEditMode(){
+    editingId = null;
+    $('editModeBadge').style.display = 'none';
+    $('submitBtn').textContent = 'Simpan Kegiatan';
+    $('cancelEditBtn').style.display = 'none';
+    ['sPartner','sLokasi','sCustomer','sHM','sKegiatan','sKeluhan','sPenanganan','sNote','gRincian'].forEach(id=>{ $(id).value=''; });
+    $('fDate').value = todayISO();
   }
 
   function renderAll(){
@@ -1132,6 +1206,7 @@
     $('fDateLabel').textContent = on ? 'Tanggal Mulai' : 'Tanggal';
     if(on && !$('fDateEnd').value) $('fDateEnd').value = $('fDate').value || todayISO();
   };
+  $('cancelEditBtn').onclick = ()=>{ exitEditMode(); };
   $('addCatBtn').onclick = ()=>{
     const panel = $('newCatPanel');
     const showing = panel.style.display === 'flex';
@@ -1183,15 +1258,53 @@
   }
 
   $('submitBtn').onclick = async ()=>{
+    const cat = $('fCategory').value;
+    if(!cat){ $('formMsg').textContent = 'Pilih / tambahkan kategori dahulu.'; return; }
+    const isService = cat.trim().toLowerCase()==='service';
+
+    // --- MODE UPDATE: sedang mengedit satu kegiatan yang sudah ada ---
+    if(editingId){
+      const date = $('fDate').value;
+      if(!date){ $('formMsg').textContent = 'Pilih tanggal dahulu.'; return; }
+      const idx = activities.findIndex(a=>a.id===editingId);
+      if(idx === -1){ exitEditMode(); return; }
+
+      const updated = { id: editingId, date, category: cat };
+      if(isService){
+        updated.service = {
+          partner: $('sPartner').value.trim(),
+          lokasi: $('sLokasi').value.trim(),
+          customer: $('sCustomer').value.trim(),
+          hm: $('sHM').value.trim(),
+          kegiatan: $('sKegiatan').value.trim(),
+          keluhan: $('sKeluhan').value.trim(),
+          penanganan: $('sPenanganan').value.trim(),
+          note: $('sNote').value.trim(),
+        };
+      } else {
+        updated.rincian = $('gRincian').value.trim();
+      }
+      activities[idx] = updated;
+      await saveActivities();
+
+      exitEditMode();
+      $('formMsg').textContent = 'Kegiatan berhasil diperbarui \u2713';
+      setTimeout(()=>{ $('formMsg').textContent=''; }, 3000);
+
+      const [y,m] = date.split('-').map(Number);
+      viewYear = y; viewMonth = m-1;
+      renderAll();
+      return;
+    }
+
+    // --- MODE TAMBAH BARU (satu tanggal atau rentang tanggal) ---
     const isRange = $('fRangeToggle').checked;
     const startDate = $('fDate').value;
     const endDate = $('fDateEnd').value;
-    const cat = $('fCategory').value;
 
     if(!startDate){ $('formMsg').textContent = isRange ? 'Pilih tanggal mulai dahulu.' : 'Pilih tanggal dahulu.'; return; }
     if(isRange && !endDate){ $('formMsg').textContent = 'Pilih tanggal akhir dahulu.'; return; }
     if(isRange && endDate < startDate){ $('formMsg').textContent = 'Tanggal akhir tidak boleh sebelum tanggal mulai.'; return; }
-    if(!cat){ $('formMsg').textContent = 'Pilih / tambahkan kategori dahulu.'; return; }
 
     let targetDates = [startDate];
     if(isRange){
@@ -1199,7 +1312,6 @@
       if(targetDates.length > 366){ $('formMsg').textContent = 'Rentang tanggal terlalu panjang (maks. 366 hari).'; return; }
     }
 
-    const isService = cat.trim().toLowerCase()==='service';
     const sharedFields = isService ? {
       partner: $('sPartner').value.trim(),
       lokasi: $('sLokasi').value.trim(),
